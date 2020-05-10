@@ -14,7 +14,7 @@
  *
  * github : https://github.com/chdenat/Palette-Synchroniser
  *
- * Version: 1.0
+ * Version: 1.0.1
  *
  */
 
@@ -186,7 +186,7 @@ class Palette_Synchroniser {
 			spl_autoload_register( function ( $class ) {
 				$path = explode( '\\', $class );
 				if ( 'Sabberworm' === (string) $path[0] ) {
-					include_once $this->settings['parser-path'] . ( ( $this->settings['parser-path'] [ - 1 ] !== '/' ) ? '/' : '' ) . implode( '/', $path ) . '.php';
+					include_once $this->settings['parser_path'] . ( ( $this->settings['parser_path'] [ - 1 ] !== '/' ) ? '/' : '' ) . implode( '/', $path ) . '.php';
 				}
 			} );
 			$this->palette = $this->get_palette_from_css_parsing();
