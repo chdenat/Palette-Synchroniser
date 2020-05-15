@@ -1,4 +1,4 @@
 # Palette-Synchroniser
 A class used to synchronise/restrict the palette rendering on Blocks, ACF but also on TinyMCE legacy editor..
 
-check https://noleam.fr/blog/palet-synchroniser
+More info soon on https://noleam.fr
