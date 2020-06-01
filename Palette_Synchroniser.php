@@ -3,7 +3,7 @@
 /*
  * Palette Synchroniser
  *
- * This class a CSS file to retrive specific CSS variables to render the right palette for blocks, ACF or legacy Tiny MCE editor.
+ * This class a CSS file to retrieve specific CSS variables to render the right palette for blocks, ACF, Customizer or legacy Tiny MCE editor.
  *
  * By default, the color choices are restricted to the defined palette but it is possible to change
  * this behaviour by settings (see constructor).
@@ -14,7 +14,7 @@
  *
  * github : https://github.com/chdenat/Palette-Synchroniser
  *
- * Version: 1.0.1
+ * Version: 1.1
  *
  */
 
@@ -29,9 +29,10 @@ use Sabberworm\CSS\RuleSet\DeclarationBlock;
 class Palette_Synchroniser {
 
 	private const CLASS_NAME = 'Palette Synchroniser';
+	private const SLUG = 'palette-synchroniser';
 
 	/**
-	 * @var array of strings - The duo of transients we manage
+	 * @var array of strings - The trio of transients we manage
 	 */
 	private array $transients;
 	/**
@@ -48,6 +49,10 @@ class Palette_Synchroniser {
 	 * @var array - color codes
 	 */
 	private array $color_codes;
+	/**
+	 * @var mixed
+	 */
+	private $prefix_name;
 
 
 	/**
@@ -55,15 +60,17 @@ class Palette_Synchroniser {
 	 *
 	 * @param array $settings - All the settings for the synchroniser
 	 *
-	 *          color_slugs:    @array of @string - colors slugs to parse (color-1, foreground-color, bg-color, text-color ...)
+	 *          color_slugs:    @string[]- colors slugs to parse (color-1, foreground-color, bg-color, text-color ...)
 	 *          file:           path of the css file that contains the CSS :root  to parse
 	 *          force :         force file parsing
 	 *                          (default : false)
 	 *          prefix:         prefix used to detects that variable is a name ( for {color-slug}, name = {prefix}-{color-slug}
-	 *          restrict:      deny/allow color customization during edition
-	 *                          (default : deny)
+	 *          strict:         deny/allow color customization during edition
+	 *                          (default : true)
+	 *          mimic:          mimic Gutenberg palette
+	 *                          (default:true)
 	 *          duration:       Duration between 2 CSS scans
-	 *                          (default : one week)
+	 *                          (default : one month)
 	 *          legacy_mode:    'insert' the custom palette at the beginning or  'append' it at the end (if customize option set to true)
 	 *                          (default : insert)
 	 *          sync @array
@@ -74,28 +81,35 @@ class Palette_Synchroniser {
 	 *              legacy:     TinyMCE palette synchronisation
 	 *                          (default : true)
 	 *
-	 *          parser_path     path of the parser (should be end by /)
+	 *          parser_path     path of the parser (should be ended by /)
+	 *
 	 */
 	public function __construct( array $settings ) {
 
+		/**
+		 * Defaults settings
+		 */
 		$defaults = [
-			'color_slugs'    => null,
-			'file'           => null,
-			'force'          => false,
-			'prefix'         => '',
-			'restrict'       => true,
-			'duration'       => MONTH_IN_SECONDS,
-			'legacy_mode'    => 'insert',
-			'sync_available' => [
-				'blocks' => true,
-				'acf'    => true,
-				'legacy' => true,
+			'color_slugs' => null,
+			'file'        => null,
+			'force'       => false,
+			'prefix'      => '',
+			'strict'      => false,
+			'mimic'       => true,
+			'duration'    => MONTH_IN_SECONDS,
+			'legacy_mode' => 'insert',
+			'sync'        => [
+				'blocks'     => true,
+				'acf'        => true,
+				'legacy'     => true,
+				'customizer' => true,
 			],
-			'parser_path'    => PLUGIN_VENDORS,
+			'parser_path' => PLUGIN_VENDORS,
 		];
 
-		// Merge defaults and provided settings
+		// Merge defaults and user settings
 		$this->settings = (array) wp_parse_args( $settings, $defaults );
+
 
 		/**
 		 * Step 0 : check if args are ok
@@ -112,13 +126,13 @@ class Palette_Synchroniser {
 		if ( ! file_exists( $this->settings['file'] ) ) {
 			throw new RuntimeException( self::CLASS_NAME . ' : CSS file does not exist !' );
 		}
-		// colors not provided
+		// color slugs not provided
 		if ( null === $this->settings['color_slugs'] ) {
 			throw new RuntimeException( self::CLASS_NAME . ' : Colors settings are mandatory !' );
 		}
 
 		/**
-		 * Step 1 : we get the palette from the css file or from the transients
+		 * we get the palette from the css file or from the transients
 		 *
 		 * @since 1.0
 		 *
@@ -135,36 +149,71 @@ class Palette_Synchroniser {
 			$this->prefix_name = $this->settings['prefix'];
 		}
 
-		// It's time to set the palette and build the simple colors one
+		/**
+		 * It's time to set the palette and build the simple colors one
+		 */
 		$this->set_palette();
 		$this->set_color_codes();
 
 		/**
-		 * Step 2 : Set the Block palette
+		 * We retrieve the URL. By default it is the current directory, but it's possible
+		 * to overload it by using the noleam/palette_synchroniser/set_url filter
+		 *
+		 * @since 1.1
+		 */
+		$this->url = apply_filters( 'noleam/palette_synchroniser/set_url', plugin_dir_url( __FILE__ ) );
+
+		/**
+		 * We enqueue CSS and JS we'll use to deploy our own settings
+		 *
+		 * @since 1.1
+		 */
+		add_action( 'customize_controls_enqueue_scripts', [ $this, 'assets_enqueue' ] );
+		add_action( 'admin_enqueue_scripts', [ $this, 'assets_enqueue' ] );
+
+		/**
+		 * Set the Block palette
 		 *
 		 * @since 1.0
 		 *
 		 */
-		if ( $this->settings['sync_available']['blocks'] ) {
+
+		if ( $this->settings['sync']['blocks'] ) {
 			add_action( 'after_setup_theme', [ $this, 'set_blocks_palette' ] );
+			add_action( 'enqueue_block_editor_assets', [ $this, 'gutenberg_palette_css_enqueue' ] );
 		}
+
 		/**
-		 * Step 3 : if ACF installed, set the ACF color palette
+		 * if ACF installed, set the ACF color palette
 		 *
 		 * @since 1.0
 		 *
 		 */
-		if ( $this->settings['sync_available']['acf'] ) {
+		if ( $this->settings['sync']['acf'] ) { //}
 			add_action( 'acf/input/admin_footer', [ $this, 'set_acf_palette' ] );
+			add_action( 'acf/input/admin_footer', [ $this, 'add_mimic_to_acf' ] );
 		}
+
 		/**
-		 * Step 4 : Set the TinyMCE Palette
+		 * Set the Iris Customizer color palette
+		 *
+		 * @since 1.1
+		 *
+		 */
+		if ( $this->settings['sync']['customizer'] ) {
+			// Due to non-intrusive method, we add a script in header and the other in footer
+			add_action( 'customize_controls_print_scripts', [ $this, 'set_customizer_palette' ], 99 );
+			add_action( 'customize_controls_print_footer_scripts', [ $this, 'add_mimic_to_customizer' ], 99 );
+		}
+
+		/**
+		 * Set the TinyMCE Palette
 		 *
 		 * @since 1.0
 		 *
 		 */
-		if ( $this->settings['sync_available']['legacy'] ) {
-			if ( $this->settings['restrict'] ) {
+		if ( $this->settings['sync']['legacy'] ) {
+			if ( $this->settings['strict'] ) {
 				// suppress the colorpicker access if we want to restrict it
 				add_filter( 'tiny_mce_plugins', [ $this, 'suppress_legacy_color_picker' ] );
 			}
@@ -232,7 +281,6 @@ class Palette_Synchroniser {
 		$colors = [];
 		// All css content
 		$css_content = new Parser( file_get_contents( $this->settings['file'] ) );
-
 		try {
 			foreach ( $css_content->parse()->getContents() as $css ) {
 				if ( $css instanceof DeclarationBlock ) {
@@ -243,7 +291,7 @@ class Palette_Synchroniser {
 								// We try to extract all $variables and all $prefix-$variables rules
 								$value   = $rule->getValue();
 								$current = substr( $rule->getRule(), 2 );
-								if ( in_array( $current, $this->settings['color_slugs'], true ) ) {
+								if ( in_array( $current, $this->settings['color_slugs'] ) ) {
 									// We find  some color defined, we save it to the colors palette
 									$colors[ $current ]['slug']  = $current;
 									$colors[ $current ]['color'] = is_string( $value ) ? $value : $value->__toString();
@@ -260,14 +308,24 @@ class Palette_Synchroniser {
 				}
 			}
 
-			// force color name to color css slug if it is not defined
-			foreach ( $colors as $color ) {
+			// suppress orphans (with no slug)
+			$colors = array_filter( $colors, function ( $color ) {
+				return isset( $color['slug'] );
+			} );
+
+			// Prepare the palette (names are forced to Slug if they do not exist
+			$palette = [];
+			foreach ( $colors as $key => $color ) {
+				$palette[ $key ]['slug']  = $color['slug'];
+				$palette[ $key ]['color'] = $color['color'];
 				if ( ! isset( $color['name'] ) ) {
-					$color['name'] = $color['slug'];
+					$palette[ $key ]['name'] = ucfirst( $color['slug'] );
+				} else {
+					$palette[ $key ]['name'] = $color['name'];
 				}
 			}
 
-			return $colors;
+			return $palette;
 
 		} catch ( Exception $e ) {
 			throw new RuntimeException( self::CLASS_NAME . $e->getTraceAsString() );
@@ -316,12 +374,83 @@ class Palette_Synchroniser {
 	 */
 	private function set_color_codes(): void {
 		foreach ( $this->palette as $color ) {
-			$this->color_codes[] = $color['color'];
+			$this->color_codes[] = [ $color['slug'], $color['name'], $color['color'] ];
 		}
 	}
 
 	/**
+	 * assets_enqueue
+	 *
+	 * Action triggered by customize_controls_enqueue_scripts and admin_enqueue_scripts
+	 *
+	 * Enqueue CSS and Js but also pass somevariables to JS
+	 *
+	 * @since 1.1
+	 *
+	 */
+	public function assets_enqueue() {
+		wp_enqueue_style( self::SLUG, $this->url . '/' . self::SLUG . '.css' );
+
+		wp_register_script( self::SLUG, $this->url . '/' . self::SLUG . '.js', [ 'iris' ] );
+		wp_localize_script( self::SLUG, 'noleam_ps', [
+			'color_codes'       => $this->color_codes,
+			'palette'           => $this->palette,
+			'default_color'     => apply_filters( 'noleam/palette_synchroniser/set_default_color', $this->color_codes[0][2] ),
+			'settings'          => $this->settings,
+			'custom_color_text' => __( 'Custom color' ),
+			'clean_text'        => __( 'Default' /*'Clear'*/ )
+		] );
+		wp_enqueue_script( self::SLUG );
+
+	}
+
+	/**
+	 * gutenberg_palette_css_enqueue
+	 *
+	 * Action triggered by enqueue_block_editor_assets
+	 *
+	 * Enqueue specific CSS for Gutenberg to declare colors in frontend and backend
+	 *
+	 * @since 1.1
+	 *
+	 */
+	public function gutenberg_palette_css_enqueue() {
+		$handle = self::SLUG . '-gutenberg';
+		wp_register_style( $handle, false, [ self::SLUG ] );
+		wp_enqueue_style( $handle );
+		// CSS can be modified with noleam/palette-synchroniser/gutenberg_css filter
+		wp_add_inline_style( $handle, apply_filters( 'noleam/palette-synchroniser/gutenberg_css', $this->build_gutenberg_palette_css_snippet() ) );
+	}
+
+	/**
+	 * build_gutenberg_palette_css_snippet
+	 *
+	 * Build snippet of CSS to declare the colors in cmopliance with Gutenberg.
+	 *
+	 * @return string
+	 *
+	 * @since 1.1
+	 *
+	 */
+	private function build_gutenberg_palette_css_snippet(): string {
+		$css = '';
+		ob_start();
+		foreach ( $this->palette as $color ) {
+			?>
+            /** <?= esc_attr( $color['name'] ) ?>**/
+            .has-<?= esc_attr( $color['slug'] ) ?>-color { color: <?= esc_attr( $color['color'] ) ?> !important;s}
+            .has-<?= esc_attr( $color['slug'] ) ?>-background-color { background-color: <?= esc_attr( $color['color'] ) ?>;}
+			<?php
+		}
+		$css .= preg_replace( '/\s+/', '', ob_get_clean() ); //miminize
+
+		return wp_strip_all_tags( $css );
+	}
+
+	/**
 	 * suppress_legacy_color_picker
+	 *
+	 * Filter triggered by tiny_mce_plugins
 	 *
 	 * Suppress the Tiny MCE color picker plugin.
 	 *
@@ -349,8 +478,9 @@ class Palette_Synchroniser {
 	/**
 	 * set_acf_palette
 	 *
-	 * Set the palette for the ACF Color Picker and made some change to Iris color picker
-	 * if there is no customisation (hide useless elements).
+	 * Action triggered by acf/input/admin_footer hook
+	 *
+	 * Set the palette colors for the ACF Color Picker
 	 *
 	 * It inserts few jQuery code to the the job.
 	 *
@@ -358,41 +488,112 @@ class Palette_Synchroniser {
 	 *
 	 */
 	public function set_acf_palette(): void {
-
-		if ( empty( $this->color_codes ) ) {
-			$this->set_color_codes();
-		}
-
-		$palette = array_unique( $this->color_codes ); // Suppress doublons
 		ob_start();
-
 		?>
         <script type="text/javascript">
-            (function ($) {
-                acf.add_filter('color_picker_args', function (args, $field) {
-                    args.palettes = [<?php
-						$array = array_keys( $palette );$last_key = end( $array );
-						foreach ( $palette as $key => $color ) {
-							echo "'$color'" . ( ( $key !== $last_key ) ? ',' : '' );
-						}
-						?>];
-                    args.defaultColor = args.palettes[0];
-					<?php if ($this->settings['restrict']) { ?>
-                    $('.acf-color-picker .iris-picker-inner').hide();
-                    $('.acf-color-picker .iris-picker.iris-border').height(15);
-                    $('a.iris-palette').css({"min-width": 16, "min-height": 16});
-					<?php } ?>
-                    return args;
-                });
+            let acf_picker = new Noleam_Iris('.acf-color-picker', true);
+            acf.add_filter('color_picker_args', (args) => {
+                colors = acf_picker.set_color_palette();
+                args.palettes = colors;
+                args.defaultColor = colors[0];
+                return args;
+            }, 1);
+        </script>
+		<?php
+		echo ob_get_clean();
+	}
 
-            })(jQuery);
+
+	/**
+	 * add_mimic_to_acf
+	 *
+	 * Action triggered by acf/render_field/type=color-picker hook
+	 *
+	 * Mimics Gutenberg if required
+	 *
+	 * It inserts few jQuery code to the the job.
+	 *
+	 * @since   1.0
+	 *
+	 */
+	public function add_mimic_to_acf(): void {
+
+		if ( ! $this->settings['sync']['acf'] || ! $this->settings['mimic'] ) {
+			return;
+		}
+		ob_start();
+		?>
+        <script type="text/javascript">
+            acf.addAction('show_field/type=color_picker', () => {
+                acf_picker.mimics_gutenberg_color_picker();
+            });
+        </script>
+		<?php
+		echo ob_get_clean();
+	}
+
+
+	/**
+	 * set_customizer_palette
+	 *
+	 * Action triggered by customize_controls_print_scripts hook
+	 *
+	 * Set the palette for all Customizer color Pickers
+	 *
+	 * It inserts few jQuery code to the the job.
+	 *
+	 * @since   1.1
+	 *
+	 */
+	public function set_customizer_palette(): void {
+
+		ob_start();
+		?>
+        <script type="text/javascript">
+            jQuery(document).ready(function ($) { //TODO replace jQuery
+                let custo_pickers = new Noleam_Iris('.customize-control-color', false)
+                $.wp.wpColorPicker.prototype.options = {
+                    palettes: custo_pickers.set_color_palette(),
+                    defaultColor: noleam_ps.default_color
+                };
+                console.log(noleam_ps.default_color)
+            });
         </script>
 		<?php
 		echo ob_get_clean();
 	}
 
 	/**
+	 * add_mimic_to_customizer
+	 *
+	 * Action triggered by customize_controls_print_footer_scripts hook
+	 *
+	 * Set the palette for all Customizer color Pickers
+	 *
+	 * It inserts few jQuery code to the the job.
+	 *
+	 * @since   1.1
+	 *
+	 */
+	public function add_mimic_to_customizer(): void {
+
+		ob_start();
+		?>
+        <script type="text/javascript">
+            jQuery(document).ready(function ($) { //TODO replace jQuery
+                let custo_pickers = new Noleam_Iris('.customize-control-color', false);
+                custo_pickers.mimics_gutenberg_color_picker();
+            });
+        </script>
+		<?php
+		echo ob_get_clean();
+	}
+
+
+	/**
 	 * set_blocks_palette
+	 *
+	 * Action triggered by after_setup_theme
 	 *
 	 * Used to define the palette for Gutenberg using add_theme_support core function
 	 *
@@ -400,9 +601,11 @@ class Palette_Synchroniser {
 	 *
 	 */
 	public function set_blocks_palette(): void {
-		// we use after_setup_theme to trigger the Gutenberg palette with/without customization
+		/**
+		 * We set but also export the palette , so it can be used outside Palette_Synchroniser
+		 */
 		add_theme_support( 'editor-color-palette', $this->palette );
-		if ( $this->settings['restrict'] ) {
+		if ( $this->settings['strict'] ) {
 			add_theme_support( 'disable-custom-colors' );
 		}
 	}
@@ -410,7 +613,9 @@ class Palette_Synchroniser {
 	/**
 	 * set_legacy_palette
 	 *
-	 * This filter sync the palette for TinyMCE by settings the right values :
+	 * Filter triggered by tiny_mce_before_init
+	 *
+	 * Sync the palette for TinyMCE by settings the right values :
 	 *      - the new palette
 	 *      - rows and cols number
 	 *
@@ -423,7 +628,7 @@ class Palette_Synchroniser {
 	 */
 	public function set_legacy_palette( $options ): array {
 
-		if ( ! $this->settings['restrict'] ) {
+		if ( ! $this->settings['strict'] ) {
 			// Customization : insert or append custom palette to the default palette
 			if ( 'insert' === $this->settings['legacy_mode'] ) {
 				add_filter( 'noleam/insert_legacy_palette', [ $this, 'set_custom_palette' ] );
@@ -463,7 +668,7 @@ class Palette_Synchroniser {
 	 */
 	public function build_legacy_palette(): array {
 		$palette = [];
-		if ( $this->settings['restrict'] ) {
+		if ( $this->settings['strict'] ) {
 			// Replace the palette if no customization
 			return $this->set_custom_palette( [] );
 		}
@@ -580,5 +785,6 @@ class Palette_Synchroniser {
 
 		return $palette;
 	}
+
 
 }
