@@ -14,7 +14,7 @@
  *
  * github : https://github.com/chdenat/Palette-Synchroniser
  *
- * Version: 1.1
+ * Version: 1.1.1
  *
  */
 
@@ -80,6 +80,9 @@ class Palette_Synchroniser {
 	 *                          (default : true)
 	 *              legacy:     TinyMCE palette synchronisation
 	 *                          (default : true)
+	 *              customizer
+	 *              customiser: Customizer palette synchronisation
+	 *                          (default : true )
 	 *
 	 *          parser_path     path of the parser (should be ended by /)
 	 *
@@ -110,6 +113,13 @@ class Palette_Synchroniser {
 		// Merge defaults and user settings
 		$this->settings = (array) wp_parse_args( $settings, $defaults );
 
+		/*
+		 * use also customiser key
+		 * @since 1.1.1
+		 */
+		if ( isset( $this->$settings['sync']['customiser'] ) ) {
+			$this->$settings['sync']['customizer'] = $this->$settings['sync']['customiser'];
+		}
 
 		/**
 		 * Step 0 : check if args are ok
@@ -171,13 +181,13 @@ class Palette_Synchroniser {
 		add_action( 'customize_controls_enqueue_scripts', [ $this, 'assets_enqueue' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'assets_enqueue' ] );
 
+
 		/**
 		 * Set the Block palette
 		 *
 		 * @since 1.0
 		 *
 		 */
-
 		if ( $this->settings['sync']['blocks'] ) {
 			add_action( 'after_setup_theme', [ $this, 'set_blocks_palette' ] );
 			add_action( 'enqueue_block_editor_assets', [ $this, 'gutenberg_palette_css_enqueue' ] );
