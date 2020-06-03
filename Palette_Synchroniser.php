@@ -14,7 +14,7 @@
  *
  * github : https://github.com/chdenat/Palette-Synchroniser
  *
- * Version: 1.1.1
+ * Version: 1.2
  *
  */
 
@@ -69,7 +69,7 @@ class Palette_Synchroniser {
 	 *                          (default : true)
 	 *          mimic:          mimic Gutenberg palette
 	 *                          (default:true)
-	 *          duration:       Duration between 2 CSS scans
+	 *          lifetime:       Duration between 2 CSS scans
 	 *                          (default : one month)
 	 *          legacy_mode:    'insert' the custom palette at the beginning or  'append' it at the end (if customize option set to true)
 	 *                          (default : insert)
@@ -99,7 +99,7 @@ class Palette_Synchroniser {
 			'prefix'      => '',
 			'strict'      => false,
 			'mimic'       => true,
-			'duration'    => MONTH_IN_SECONDS,
+			'lifetime'    => MONTH_IN_SECONDS,
 			'legacy_mode' => 'insert',
 			'sync'        => [
 				'blocks'     => true,
@@ -119,6 +119,12 @@ class Palette_Synchroniser {
 		 */
 		if ( isset( $this->$settings['sync']['customiser'] ) ) {
 			$this->$settings['sync']['customizer'] = $this->$settings['sync']['customiser'];
+		}
+		/*
+		 * duration is now obsolete, replaced by lifetime
+		 */
+		if ( isset( $this->$settings['sync']['duration'] ) ) {
+			$this->$settings['sync']['lifetime'] = $this->$settings['sync']['duration'];
 		}
 
 		/**
@@ -353,9 +359,9 @@ class Palette_Synchroniser {
 	 */
 	private function save_palette(): void {
 		// we save timestamp for a period (-1 second)
-		set_transient( $this->transients['date'], time(), $this->settings['duration'] - 1 );
+		set_transient( $this->transients['date'], time(), $this->settings['lifetime'] - 1 );
 		// and palette (for same period)
-		set_transient( $this->transients['palette'], $this->palette, $this->settings['duration'] );
+		set_transient( $this->transients['palette'], $this->palette, $this->settings['lifetime'] );
 	}
 
 	/**
@@ -683,7 +689,7 @@ class Palette_Synchroniser {
 			return $this->set_custom_palette( [] );
 		}
 		// 1 - insertion of custom palette in first elements.
-		$palette = apply_filters( 'noleam/insert_legacy_palette', $palette );
+		$palette = apply_filters( 'noleam/palette_synchroniser/insert_legacy_palette', $palette );
 
 		// 2 - Then add default palette
 		$palette = array_merge( $palette, [
@@ -767,7 +773,7 @@ class Palette_Synchroniser {
 			"Plum",
 		] );
 		// 3 - append custom palette
-		$palette = array_merge( $palette, apply_filters( 'noleam/append_legacy_palette', $palette ) );
+		$palette = array_merge( $palette, apply_filters( 'noleam/palette_synchroniser/append_legacy_palette', $palette ) );
 
 		return $palette;
 	}
