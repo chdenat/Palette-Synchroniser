@@ -14,7 +14,7 @@
  *
  * github : https://github.com/chdenat/Palette-Synchroniser
  *
- * Version: 1.2
+ * Version: 1.3
  *
  */
 
@@ -117,14 +117,14 @@ class Palette_Synchroniser {
 		 * use also customiser key
 		 * @since 1.1.1
 		 */
-		if ( isset( $this->$settings['sync']['customiser'] ) ) {
-			$this->$settings['sync']['customizer'] = $this->$settings['sync']['customiser'];
+		if ( isset( $this->settings['sync']['customiser'] ) ) {
+			$this->settings['sync']['customizer'] = $this->$settings['sync']['customiser'];
 		}
 		/*
 		 * duration is now obsolete, replaced by lifetime
 		 */
-		if ( isset( $this->$settings['sync']['duration'] ) ) {
-			$this->$settings['sync']['lifetime'] = $this->$settings['sync']['duration'];
+		if ( isset( $this->settings['sync']['duration'] ) ) {
+			$this->settings['sync']['lifetime'] = $this->$settings['sync']['duration'];
 		}
 
 		/**
@@ -186,6 +186,7 @@ class Palette_Synchroniser {
 		 */
 		add_action( 'customize_controls_enqueue_scripts', [ $this, 'assets_enqueue' ] );
 		add_action( 'admin_enqueue_scripts', [ $this, 'assets_enqueue' ] );
+		add_action( 'wp_enqueue_scripts', [ $this, 'assets_enqueue' ] );
 
 
 		/**
@@ -196,7 +197,7 @@ class Palette_Synchroniser {
 		 */
 		if ( $this->settings['sync']['blocks'] ) {
 			add_action( 'after_setup_theme', [ $this, 'set_blocks_palette' ] );
-			add_action( 'enqueue_block_editor_assets', [ $this, 'gutenberg_palette_css_enqueue' ] );
+			add_action( 'enqueue_block_assets', [ $this, 'gutenberg_palette_css_enqueue' ] );
 		}
 
 		/**
@@ -235,6 +236,7 @@ class Palette_Synchroniser {
 			}
 			add_action( 'tiny_mce_before_init', [ $this, 'set_legacy_palette' ] );
 		}
+
 	}
 
 	/**
@@ -397,7 +399,8 @@ class Palette_Synchroniser {
 	/**
 	 * assets_enqueue
 	 *
-	 * Action triggered by customize_controls_enqueue_scripts and admin_enqueue_scripts
+	 * Action triggered by customize_controls_enqueue_scripts and admin_enqueue_scripts for the backend
+     * but also wp_enqueue_script for the frontend
 	 *
 	 * Enqueue CSS and Js but also pass somevariables to JS
 	 *
