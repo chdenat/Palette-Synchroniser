@@ -97,7 +97,7 @@ class Palette_Synchroniser {
 			'file'        => null,
 			'force'       => false,
 			'prefix'      => '',
-			'strict'      => false,
+			'strict'      => true,
 			'mimic'       => true,
 			'lifetime'    => MONTH_IN_SECONDS,
 			'legacy_mode' => 'insert',
