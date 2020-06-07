@@ -14,7 +14,7 @@
  *
  * github : https://github.com/chdenat/Palette-Synchroniser
  *
- * Version: 1.3
+ * Version: 1.3.1
  *
  */
 
@@ -25,6 +25,7 @@ use Exception;
 use RuntimeException;
 use Sabberworm\CSS\Parser;
 use Sabberworm\CSS\RuleSet\DeclarationBlock;
+use function NOLEAM\DEV\debug_;
 
 class Palette_Synchroniser {
 
@@ -457,7 +458,7 @@ class Palette_Synchroniser {
 		foreach ( $this->palette as $color ) {
 			?>
             /** <?= esc_attr( $color['name'] ) ?>**/
-            .has-<?= esc_attr( $color['slug'] ) ?>-color { color: <?= esc_attr( $color['color'] ) ?> !important;s}
+            .has-<?= esc_attr( $color['slug'] ) ?>-color { color: <?= esc_attr( $color['color'] ) ?> !important;}
             .has-<?= esc_attr( $color['slug'] ) ?>-background-color { background-color: <?= esc_attr( $color['color'] ) ?>;}
 			<?php
 		}
@@ -507,6 +508,7 @@ class Palette_Synchroniser {
 	 *
 	 */
 	public function set_acf_palette(): void {
+	    debug_('ACF');
 		ob_start();
 		?>
         <script type="text/javascript">
