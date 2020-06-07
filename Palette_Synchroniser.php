@@ -14,7 +14,7 @@
  *
  * github : https://github.com/chdenat/Palette-Synchroniser
  *
- * Version: 1.3.1
+ * Version: 1.4
  *
  */
 
@@ -31,6 +31,7 @@ class Palette_Synchroniser {
 
 	private const CLASS_NAME = 'Palette Synchroniser';
 	private const SLUG = 'palette-synchroniser';
+	private static $instance;
 
 	/**
 	 * @var array of strings - The trio of transients we manage
@@ -89,6 +90,7 @@ class Palette_Synchroniser {
 	 *
 	 */
 	public function __construct( array $settings ) {
+	    debug_('OK');
 
 		/**
 		 * Defaults settings
@@ -508,7 +510,6 @@ class Palette_Synchroniser {
 	 *
 	 */
 	public function set_acf_palette(): void {
-	    debug_('ACF');
 		ob_start();
 		?>
         <script type="text/javascript">
@@ -805,6 +806,19 @@ class Palette_Synchroniser {
 		}
 
 		return $palette;
+	}
+
+	public static function getInstance($args)
+	{
+		// Check is $_instance has been set
+		if(!isset(self::$instance))
+		{
+			// Creates sets object to instance
+			self::$instance = new Palette_Synchroniser($args);
+		}
+
+		// Returns the instance
+		return self::$instance;
 	}
 
 
