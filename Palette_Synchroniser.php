@@ -3,10 +3,11 @@
 /*
  * Palette Synchroniser
  *
- * This class a CSS file to retrieve specific CSS variables to render the right palette for blocks, ACF, Customizer or legacy Tiny MCE editor.
+ * - Synchronise palette for Blocks, ACF, Customizer or TinyMCE
+ * - Mimics Blocks Color Picker on Iris
  *
  * By default, the color choices are restricted to the defined palette but it is possible to change
- * this behaviour by settings (see constructor).
+ * this behaviour by settings (see github).
  *
  * The scan uses Sabberworm CSS Parser : https://github.com/sabberworm/PHP-CSS-Parser
  *
@@ -31,7 +32,7 @@ class Palette_Synchroniser {
 
 	private const CLASS_NAME = 'Palette Synchroniser';
 	private const SLUG = 'palette-synchroniser';
-	private static $instance;
+	private static Palette_Synchroniser $instance;
 
 	/**
 	 * @var array of strings - The trio of transients we manage
@@ -90,8 +91,6 @@ class Palette_Synchroniser {
 	 *
 	 */
 	public function __construct( array $settings ) {
-	    debug_('OK');
-
 		/**
 		 * Defaults settings
 		 */
@@ -400,10 +399,26 @@ class Palette_Synchroniser {
 	}
 
 	/**
+     * getInstance
+     *
+	 * @param $args
+	 *
+	 * @return Palette_Synchroniser
+     *
+     * @since  1.4
+	 */
+	public static function getInstance( $args ) {
+		if ( ! isset( self::$instance ) ) {
+			self::$instance = new Palette_Synchroniser( $args );
+		}
+		return self::$instance;
+	}
+
+	/**
 	 * assets_enqueue
 	 *
 	 * Action triggered by customize_controls_enqueue_scripts and admin_enqueue_scripts for the backend
-     * but also wp_enqueue_script for the frontend
+	 * but also wp_enqueue_script for the frontend
 	 *
 	 * Enqueue CSS and Js but also pass somevariables to JS
 	 *
@@ -496,7 +511,6 @@ class Palette_Synchroniser {
 		return $plugins;
 	}
 
-
 	/**
 	 * set_acf_palette
 	 *
@@ -522,9 +536,7 @@ class Palette_Synchroniser {
             }, 1);
         </script>
 		<?php
-		echo ob_get_clean();
 	}
-
 
 	/**
 	 * add_mimic_to_acf
@@ -553,7 +565,6 @@ class Palette_Synchroniser {
 		<?php
 		echo ob_get_clean();
 	}
-
 
 	/**
 	 * set_customizer_palette
@@ -610,7 +621,6 @@ class Palette_Synchroniser {
 		<?php
 		echo ob_get_clean();
 	}
-
 
 	/**
 	 * set_blocks_palette
@@ -806,19 +816,6 @@ class Palette_Synchroniser {
 		}
 
 		return $palette;
-	}
-
-	public static function getInstance($args)
-	{
-		// Check is $_instance has been set
-		if(!isset(self::$instance))
-		{
-			// Creates sets object to instance
-			self::$instance = new Palette_Synchroniser($args);
-		}
-
-		// Returns the instance
-		return self::$instance;
 	}
 
 
