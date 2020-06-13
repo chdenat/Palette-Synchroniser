@@ -96,7 +96,7 @@ class Palette_Synchroniser {
 		$defaults = [
 			'color_slugs' => null,
 			'file'        => null,
-			'force'       => true,
+			'force'       => false,
 			'prefix'      => '',
 			'strict'      => true,
 			'mimic'       => true,
