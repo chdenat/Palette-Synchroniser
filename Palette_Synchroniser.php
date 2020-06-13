@@ -15,7 +15,7 @@
  *
  * github : https://github.com/chdenat/Palette-Synchroniser
  *
- * Version: 1.4
+ * Version: 1.5
  *
  */
 
@@ -26,7 +26,6 @@ use Exception;
 use RuntimeException;
 use Sabberworm\CSS\Parser;
 use Sabberworm\CSS\RuleSet\DeclarationBlock;
-use function NOLEAM\DEV\debug_;
 
 class Palette_Synchroniser {
 
@@ -97,7 +96,7 @@ class Palette_Synchroniser {
 		$defaults = [
 			'color_slugs' => null,
 			'file'        => null,
-			'force'       => false,
+			'force'       => true,
 			'prefix'      => '',
 			'strict'      => true,
 			'mimic'       => true,
@@ -310,24 +309,30 @@ class Palette_Synchroniser {
 							foreach ( $css->getRules() as $rule ) {
 								// We try to extract all $variables and all $prefix-$variables rules
 								$value   = $rule->getValue();
-								$current = substr( $rule->getRule(), 2 );
+								$current = substr( $rule->getRule(), 2 ); // suppress -- => ([a-zA-z\-0-9]+)
 								if ( in_array( $current, $this->settings['color_slugs'] ) ) {
-									// We find  some color defined, we save it to the colors palette
+									// We found  some color defined, we save it to the colors palette
 									$colors[ $current ]['slug']  = $current;
 									$colors[ $current ]['color'] = is_string( $value ) ? $value : $value->__toString();
-								} else if ( ! empty( $this->settings['prefix'] ) && strpos( $rule->getRule(), '--' . $this->settings['prefix'] . '-' ) === 0 ) {
-									// We find a color name, we add it to the colors palette
-									$current                    = substr( $rule->getRule(), 3 + strlen( $this->settings['prefix'] ) );
-									$colors[ $current ]['name'] = is_string( $value ) ? $value : $value->__toString();
+								} else {
+									if ( ! empty( $this->settings['prefix'] ) ) {
+										// It is not a color, may be it is a color name
+										// Chek if it is <something>-<color> ([a-zA-z0-9]*)-([a-zA-z\-0-9]*)
+										preg_match( '/([a-zA-z0-9]*)-([a-zA-z\-0-9]*)/', $current, $matches );
+										if ( count( $matches ) === 3 ) {
+											// Yes it is : If we find prefix and color name, lets'go to save it
+											if ( $matches[1] === $this->settings['prefix'] && in_array( $matches[2], $this->settings['color_slugs'] ) ) {
+												$current                    = $matches[1];
+												$colors[ $current ]['name'] = is_string( $value ) ? $value : $value->__toString();
+											}
+										}
+									}
 								}
 							}
-
-							break;
 						}
 					}
 				}
 			}
-
 			// suppress orphans (with no slug)
 			$colors = array_filter( $colors, function ( $color ) {
 				return isset( $color['slug'] );
@@ -399,18 +404,19 @@ class Palette_Synchroniser {
 	}
 
 	/**
-     * getInstance
-     *
+	 * getInstance
+	 *
 	 * @param $args
 	 *
 	 * @return Palette_Synchroniser
-     *
-     * @since  1.4
+	 *
+	 * @since  1.4
 	 */
 	public static function getInstance( $args ) {
 		if ( ! isset( self::$instance ) ) {
 			self::$instance = new Palette_Synchroniser( $args );
 		}
+
 		return self::$instance;
 	}
 
